@@ -17,3 +17,4 @@
  ## Future Improvements
  - Automatic detection of the user's operating system
  - Library management features including uninstallation (currently only installation is supported)
+.
