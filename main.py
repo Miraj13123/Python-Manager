@@ -1,32 +1,122 @@
 import os
 import subprocess
 import sys
+from datetime import datetime
 
-def list_pip_packages():
+def get_pip_package_times():
     try:
-        result = subprocess.check_output([sys.executable, "-m", "pip", "list"], text=True)
-        print("\nInstalled Windows (pip) packages:")
-        print(result)
+        result = subprocess.check_output([sys.executable, "-m", "pip", "list", "--format=freeze"], text=True)
+        packages = {}
+        for line in result.split('\n'):
+            if line.strip():
+                pkg_name = line.split('==')[0]
+                try:
+                    pkg_info = subprocess.check_output([sys.executable, "-m", "pip", "show", pkg_name], text=True)
+                    for info_line in pkg_info.split('\n'):
+                        if info_line.startswith('Location:'):
+                            location = info_line.split(':', 1)[1].strip()
+                            pkg_path = os.path.join(location, pkg_name.lower().replace('-', '_') + '*.dist-info')
+                            import glob
+                            dist_info = glob.glob(pkg_path)
+                            if dist_info:
+                                install_time = os.path.getctime(dist_info[0])
+                                packages[pkg_name] = install_time
+                            else:
+                                packages[pkg_name] = 0  # Default time if no metadata
+                            break
+                except:
+                    packages[pkg_name] = 0  # Default time if error
+        return packages
     except:
-        print("Error listing pip packages")
+        return {}
 
-def list_apt_packages():
+def get_apt_package_times():
     try:
         result = subprocess.check_output(["dpkg", "-l"], text=True)
-        print("\nInstalled Linux packages (showing python3- packages):")
+        packages = {}
         for line in result.split('\n'):
-            if 'python3-' in line:
-                print(line)
+            if line.strip() and 'python3-' in line.lower():
+                parts = line.split()
+                if len(parts) > 1 and parts[0] == 'ii':  # Installed packages only
+                    pkg_name = parts[1]
+                    try:
+                        pkg_info = subprocess.check_output(["dpkg-query", "-s", pkg_name], text=True)
+                        for info_line in pkg_info.split('\n'):
+                            if info_line.startswith('Installed-Time:'):
+                                install_time = float(info_line.split(':')[1].strip())
+                                packages[pkg_name] = install_time
+                                break
+                        else:
+                            packages[pkg_name] = 0  # Default time if no Installed-Time
+                    except:
+                        packages[pkg_name] = 0  # Default time if error
+        return packages
     except:
-        print("Error listing apt packages")
+        return {}
 
-def list_brew_packages():
+def get_brew_package_times():
     try:
         result = subprocess.check_output(["brew", "list"], text=True)
-        print("\nInstalled Mac (Homebrew) packages:")
-        print(result)
+        packages = {}
+        for line in result.split('\n'):
+            if line.strip() and 'python' in line.lower():
+                pkg_name = line.strip()
+                try:
+                    install_time = os.path.getctime(f"/usr/local/Cellar/{pkg_name}")
+                    packages[pkg_name] = install_time
+                except:
+                    packages[pkg_name] = 0  # Default time if error
+        return packages
     except:
-        print("Error listing brew packages")
+        return {}
+
+def list_packages(os_choice, sort_type):
+    try:
+        if os_choice == "1":  # Linux
+            packages = get_apt_package_times()
+            if not packages:
+                print("No Python3 packages found.")
+                return []
+            if sort_type == "1":  # Time sorting
+                sorted_packages = sorted(packages.items(), key=lambda x: x[1])
+                print("\nInstalled Linux (apt) packages (time sorted - latest at bottom):")
+            else:  # Alphabetical sorting
+                sorted_packages = sorted(packages.items(), key=lambda x: x[0])
+                print("\nInstalled Linux (apt) packages (alphabetical):")
+        
+        elif os_choice == "2":  # Windows
+            packages = get_pip_package_times()
+            if not packages:
+                print("No pip packages found.")
+                return []
+            if sort_type == "1":  # Time sorting
+                sorted_packages = sorted(packages.items(), key=lambda x: x[1])
+                print("\nInstalled Windows (pip) packages (time sorted - latest at bottom):")
+            else:  # Alphabetical sorting
+                sorted_packages = sorted(packages.items(), key=lambda x: x[0])
+                print("\nInstalled Windows (pip) packages (alphabetical):")
+        
+        elif os_choice == "3":  # Mac
+            packages = get_brew_package_times()
+            if not packages:
+                print("No Python-related brew packages found.")
+                return []
+            if sort_type == "1":  # Time sorting
+                sorted_packages = sorted(packages.items(), key=lambda x: x[1])
+                print("\nInstalled Mac (brew) packages (time sorted - latest at bottom):")
+            else:  # Alphabetical sorting
+                sorted_packages = sorted(packages.items(), key=lambda x: x[0])
+                print("\nInstalled Mac (brew) packages (alphabetical):")
+        
+        pkg_list = []
+        for i, (pkg, install_time) in enumerate(sorted_packages, 1):
+            time_str = datetime.fromtimestamp(install_time).strftime('%Y-%m-%d %H:%M:%S') if install_time else "Unknown"
+            print(f"{i}. {pkg} (Installed: {time_str})")
+            pkg_list.append(pkg)
+        return pkg_list
+    except Exception as e:
+        print(f"Error listing packages: {e}")
+        return []
 
 def search_pip_package(search_term):
     try:
@@ -73,6 +163,15 @@ def install_windows(package):
 def install_mac(package):
     os.system(f"brew install {package}")
 
+def uninstall_linux(package):
+    os.system(f"sudo apt-get remove {package} -y")
+
+def uninstall_windows(package):
+    os.system(f"pip uninstall {package} -y")
+
+def uninstall_mac(package):
+    os.system(f"brew uninstall {package}")
+
 def display_search_results(packages, os_type):
     if not packages:
         print(f"No {os_type} packages found.")
@@ -96,24 +195,68 @@ def display_search_results(packages, os_type):
         print("Invalid input.")
         return None
 
+def handle_package_removal(os_choice, pkg_list):
+    while True:
+        print("\nPackage options:")
+        print("1. Delete/Remove package")
+        print("0. Go back")
+        choice = input("Enter your choice (0-1): ")
+        
+        if choice == "0":
+            break
+        elif choice == "1":
+            pkg_num = input("Enter the package number to remove (or 0 to cancel): ")
+            if pkg_num == "0":
+                continue
+            try:
+                idx = int(pkg_num) - 1
+                if 0 <= idx < len(pkg_list):
+                    pkg_to_remove = pkg_list[idx]
+                    if os_choice == "1":
+                        uninstall_linux(pkg_to_remove)
+                    elif os_choice == "2":
+                        uninstall_windows(pkg_to_remove)
+                    elif os_choice == "3":
+                        uninstall_mac(pkg_to_remove)
+                    print(f"Removed {pkg_to_remove}")
+                else:
+                    print("Invalid package number.")
+            except ValueError:
+                print("Invalid input.")
+        else:
+            print("Invalid choice. Please select 0 or 1.")
+
+def list_and_manage_packages(os_choice):
+    while True:
+        print("\nSelect sort type:")
+        print("1. Sort by installation time (latest at bottom)")
+        print("2. Sort alphabetically")
+        print("0. Back")
+        sort_type = input("Enter your choice (0-2): ")
+        
+        if sort_type == "0":
+            break
+            
+        if sort_type in ["1", "2"]:
+            pkg_list = list_packages(os_choice, sort_type)
+            if pkg_list:
+                handle_package_removal(os_choice, pkg_list)
+        else:
+            print("Invalid choice. Please select 0, 1, or 2.")
+
 def handle_os_choice(os_choice):
     while True:
         print(f"\nSelected OS: {'Linux' if os_choice == '1' else 'Windows' if os_choice == '2' else 'Mac'}")
         print("1. List installed packages")
         print("2. Download new packages")
-        print("3. Back to OS selection")
-        action = input("Enter your choice (1-3): ")
+        print("0. Back to OS selection")
+        action = input("Enter your choice (0-2): ")
         
-        if action == "3":
+        if action == "0":
             break
             
         elif action == "1":
-            if os_choice == "1":
-                list_apt_packages()
-            elif os_choice == "2":
-                list_pip_packages()
-            elif os_choice == "3":
-                list_brew_packages()
+            list_and_manage_packages(os_choice)
                 
         elif action == "2":
             search_term = input("Enter what you want to search for: ")
@@ -133,7 +276,7 @@ def handle_os_choice(os_choice):
                 if selected_package:
                     install_mac(selected_package)
         else:
-            print("Invalid choice. Please select 1, 2, or 3.")
+            print("Invalid choice. Please select 0, 1, or 2.")
 
 def main():
     while True:
@@ -141,17 +284,17 @@ def main():
         print("1. Linux")
         print("2. Windows")
         print("3. Mac")
-        print("4. Exit")
-        choice = input("Enter the number corresponding to your OS: ")
+        print("0. Exit")
+        choice = input("Enter the number corresponding to your OS (0-3): ")
         
-        if choice == "4":
+        if choice == "0":
             print("Goodbye!")
             break
             
         if choice in ["1", "2", "3"]:
             handle_os_choice(choice)
         else:
-            print("Invalid choice. Please select a valid option.")
+            print("Invalid choice. Please select a valid option (0-3).")
 
 if __name__ == "__main__":
     main()
