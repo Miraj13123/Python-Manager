@@ -1,12 +1,12 @@
- # Package Manager Utility
- A simple command-line tool for managing Python packages across different operating systems in one sentence.
+ # Library Manager Utility for 'Python'
+ A simple command-line tool for managing Python packages across different operating systems.
  ## Key Features
  - Supports Linux, Windows, and Mac operating systems
- - Lists installed packages (default and downloaded)
+ - Lists installed Python Libraries (sort: time & alphabetical )
  - Searches for new packages to install
  - Installs packages using native package managers (apt, pip, brew)
  - User-friendly menu interface
- - Package Uninstallation Proccess
+ - Library Uninstallation Proccess
  ## Changes from Previous Version
  - Added functionality to uninstall packages and list packages in a sorted way
  ## Requirements to Run This Utility
