@@ -30,6 +30,7 @@ def get_pip_package_times():
     except:
         return {}
 
+"""
 def get_apt_package_times():
     try:
         result = subprocess.check_output(["dpkg", "-l"], text=True)
@@ -48,6 +49,33 @@ def get_apt_package_times():
                                 break
                         else:
                             packages[pkg_name] = 0  # Default time if no Installed-Time
+                    except:
+                        packages[pkg_name] = 0  # Default time if error
+        return packages
+    except:
+        return {}
+"""
+
+        
+def get_apt_package_times():
+    try:
+        result = subprocess.check_output(["dpkg", "-l"], text=True)
+        packages = {}
+        for line in result.split('\n'):
+            if line.strip() and 'python3-' in line.lower():
+                parts = line.split()
+                if len(parts) > 1 and parts[0] == 'ii':  # Installed packages only
+                    pkg_name = parts[1]
+                    try:
+                        pkg_info = subprocess.check_output(
+                            ["dpkg-query", "-W", "--showformat=${Install-Date}", pkg_name], text=True
+                        )
+                        install_time_str = pkg_info.strip()
+                        if install_time_str:
+                            install_time = datetime.strptime(install_time_str, '%Y-%m-%d').timestamp()
+                            packages[pkg_name] = install_time
+                        else:
+                            packages[pkg_name] = 0  # Default time if no date
                     except:
                         packages[pkg_name] = 0  # Default time if error
         return packages
@@ -118,6 +146,7 @@ def list_packages(os_choice, sort_type):
         print(f"Error listing packages: {e}")
         return []
 
+"""# The original pip search command is deprecated and may not work in all environments.
 def search_pip_package(search_term):
     try:
         result = subprocess.check_output([sys.executable, "-m", "pip", "search", search_term], text=True)
@@ -126,6 +155,40 @@ def search_pip_package(search_term):
             if line.strip() and '(' in line:
                 package_name = line.split()[0]
                 packages.append(package_name)
+        return packages[:15]
+    except:
+        return []
+"""
+# This is extra for windows: ensures if 'requests' is installed or not # and installs it if not
+def ensure_requests_installed():
+    try:
+        # Check if requests is installed
+        subprocess.check_output([sys.executable, "-m", "pip", "show", "requests"], text=True)
+        print("requests is already installed.")
+    except subprocess.CalledProcessError:
+        # If requests is not installed, install it
+        print("requests not found. Installing requests...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "requests"])
+        print("requests installed successfully.")
+
+def search_pip_package(search_term):
+    try:
+        import requests
+        url = f"https://pypi.org/pypi/{search_term}/json"
+        response = requests.get(url)
+        if response.status_code == 200:
+            # If exact match exists, return it as a single result
+            packages = [search_term]
+        else:
+            # Fallback to a broader search if exact match fails
+            url = f"https://pypi.org/search/?q={search_term}"
+            response = requests.get(url)
+            if response.status_code == 200:
+                # Note: PyPI search page returns HTML, so we simulate a basic result
+                # For simplicity, return the search term as a single package
+                packages = [search_term]  # Placeholder; real parsing needs BeautifulSoup
+            else:
+                packages = []
         return packages[:15]
     except:
         return []
@@ -244,6 +307,7 @@ def list_and_manage_packages(os_choice):
         else:
             print("Invalid choice. Please select 0, 1, or 2.")
 
+# Multi OS -> OS choice
 def handle_os_choice(os_choice):
     while True:
         print(f"\nSelected OS: {'Linux' if os_choice == '1' else 'Windows' if os_choice == '2' else 'Mac'}")
@@ -259,6 +323,8 @@ def handle_os_choice(os_choice):
             list_and_manage_packages(os_choice)
                 
         elif action == "2":
+            if os_choice == "2":  # Windows
+                ensure_requests_installed()  # Check and install requests before proceeding
             search_term = input("Enter what you want to search for: ")
             if os_choice == "1":
                 packages = search_apt_package(search_term)
