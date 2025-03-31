@@ -23,7 +23,7 @@
  >- Never Tested with "Mac"   :(
 
 ### _Contribution Request_
- >- if you have mac for testing then please contact try with the provided email if you wanna contribute.
+ >- if you have mac for testing then please try to contact with the provided email if you wanna contribute.
 
 # Organizers
  - Raiyan \[ Main Project Starter \]
